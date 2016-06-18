@@ -17,10 +17,7 @@
 
 package com.jethrocarr.howalarming.gcmserver;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
+import com.google.gson.*;
 import com.google.gson.annotations.SerializedName;
 import com.google.gson.reflect.TypeToken;
 import org.jivesoftware.smack.util.StringUtils;
@@ -28,6 +25,7 @@ import org.jivesoftware.smack.util.StringUtils;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Map;
+import java.util.List;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
@@ -40,20 +38,6 @@ import java.util.logging.Logger;
  */
 public class HowAlarmingServer {
 
-  // FriendlyPing Client.
-  private class Client {
-    String name;
-    @SerializedName("registration_token")
-    String registrationToken;
-    @SerializedName("profile_picture_url")
-    String profilePictureUrl;
-
-    public boolean isValid() {
-      return StringUtils.isNotEmpty(name) && StringUtils.isNotEmpty(registrationToken) &&
-          StringUtils.isNotEmpty(profilePictureUrl);
-    }
-  }
-
   // FriendlyGcmServer defines onMessage to handle incoming friendly ping messages.
   private class FriendlyGcmServer extends GcmServer {
 
@@ -63,21 +47,46 @@ public class HowAlarmingServer {
 
     @Override
     public void onMessage(String from, JsonObject jData) {
-      if (jData.has("action")) {
-        String action = jData.get("action").getAsString();
-        if (action.equals(REGISTER_NEW_CLIENT)) {
-          registerNewClient(jData);
-        } else if (action.equals("ping_client")) {
-          String toToken = jData.get("to").getAsString();
-          String senderToken = jData.get("sender").getAsString();
-          if (StringUtils.isNotEmpty(toToken) && StringUtils.isNotEmpty(senderToken)) {
-            pingClient(toToken, senderToken);
-          } else {
-            logger.info("Unable to ping unless to and sender tokens are available.");
-          }
+      /**
+       * We only support a few of the common commands to all alarm models here.
+       */
+
+      if (jData.has("registration_token")) {
+        String registration_token = jData.get("registration_token").getAsString();
+        logger.info("Message sender: "+ registration_token);
+
+        if (!registeredClients.contains(registration_token)) {
+          registerNewClient(registration_token);
         }
+      }
+
+      if (jData.has("command")) {
+        String command = jData.get("command").getAsString();
+
+        logger.info("Command \""+ command +"\" received from device.");
+
+        switch (command) {
+          case "status":
+          case "arm":
+          case "disarm":
+          case "fire":
+          case "medical":
+          case "police":
+            // Supported simple commands in HowAlarming.
+
+            // TODO: Feed into beanstalk queue.
+
+            // TODO: test by sending message
+            messageAllClients();
+          break;
+
+          default:
+            logger.warning("Command "+ command +" is not a support simple command type, unable to action message");
+        }
+
+
       } else {
-        logger.info("No action found. Message received missing action.");
+        logger.info("Unexpected message received from GCM, ignoring.");
       }
     }
   }
@@ -88,125 +97,92 @@ public class HowAlarmingServer {
   private static final String SERVER_API_KEY = System.getenv("GCM_API_KEY");
   private static final String SENDER_ID = System.getenv("GCM_SENDER_ID");
 
-  // Actions
-  private static final String REGISTER_NEW_CLIENT = "register_new_client";
-  private static final String BROADCAST_NEW_CLIENT = "broadcast_new_client";
-  private static final String SEND_CLIENT_LIST = "send_client_list";
-  private static final String PING_CLIENT = "ping_client";
-  // Keys
-  private static final String ACTION_KEY = "action";
-  private static final String CLIENT_KEY = "client";
-  private static final String CLIENTS_KEY = "clients";
-  private static final String DATA_KEY = "data";
-  private static final String SENDER_KEY = "sender";
 
-  private static final String NEW_CLIENT_TOPIC = "/topics/newclient";
-  private static final String PING_TITLE = "Friendly Ping!";
-  private static final String PING_ICON = "mipmap/ic_launcher";
-  private static final String CLICK_ACTION = "ping_received";
+  // Other
+  public static final String SERVICE_NAME = "HowAlarming GCM Server";
 
-  public static final String SERVICE_NAME = "Friendly Ping Server";
+  // Store registered clients for life of the application. This is populated fresh after the server
+  // and clients are launched consecutively.
+  private List<String> registeredClients;
 
-  // Store of clients registered with HowAlarmingServer.
-  private Map<String, Client> clientMap;
   // Listener responsible for handling incoming registrations and pings.
   private FriendlyGcmServer friendlyGcmServer;
 
   // Gson helper to assist with going to and from JSON and Client.
   private Gson gson;
 
-  public HowAlarmingServer(String apiKey, String senderId) {
-    clientMap = new ConcurrentHashMap<String, Client>();
 
-    Client serverClient = createServerClient();
-    clientMap.put(serverClient.registrationToken, serverClient);
+  public HowAlarmingServer(String apiKey, String senderId) {
+
+    registeredClients = new ArrayList<String>();
 
     gson = new GsonBuilder().create();
 
     friendlyGcmServer = new FriendlyGcmServer(apiKey, senderId, SERVICE_NAME);
   }
 
+
   /**
-   * Create a Client object to be used in responses to pings to the server.
+   * Add a new client to the client list.
    *
-   * @return Server Client.
+   * @param registrationToken String with GCM token ID of client.
    */
-  private Client createServerClient() {
-    Client client = new Client();
-    client.name = "Larry";
-    client.registrationToken = SENDER_ID + "@gcm.googleapis.com";
-    client.profilePictureUrl =
-        "https://lh3.googleusercontent.com/-Y86IN-vEObo/AAAAAAAAAAI/AAAAAAADO1I/QzjOGHq5kNQ/photo.jpg?sz=50";
-    return client;
+  private void registerNewClient(String registrationToken) {
+    if (!registeredClients.contains(registrationToken)) {
+      logger.info("Registered new client "+ registrationToken);
+      registeredClients.add(registrationToken);
+    }
   }
 
-  /**
-   * Create Client from given JSON data, add client to client list, broadcast newly registered
-   * client to all previously registered clients and send client list to new client.
-   *
-   * @param jData JSON data containing properties of new Client.
-   */
-  private void registerNewClient(JsonObject jData) {
-    Client newClient = gson.fromJson(jData, Client.class);
-    if (newClient.isValid()) {
-      // TODO: We need to add the client to an array of clients.
 
-      /*
-      addClient(newClient);
-      broadcastNewClient(newClient);
-      sendClientList(newClient);
-      clientMap.put(client.registrationToken, client);
-      */
-    } else {
-      logger.log(Level.WARNING, "Could not unpack received data into a Client.");
+  /**
+   * Define the format of push messages to the device
+   */
+
+  public class pushMessage {
+    public String priority;
+    public Map<String,String> data;
+    public Map<String,String> notification;
+
+    public pushMessage() {
+      // Data for the actual apps (iOS + Android), same format as the documented HowAlarming beanstalk queue.
+      data = new ConcurrentHashMap<String, String>();
+
+      // Fields used for APNS messages (iOS) to determine the information for the notification centre.
+      notification = new ConcurrentHashMap<String, String>();
+
+      // We want to ensure APNS always give us priority pushes for alarm events, otherwise
+      // alarm events can be delayed.
+      priority = "high";
     }
   }
 
   /**
-   * Add given client to Map of Clients.
-   *
-   * @param client Client to be added.
+   * Deliver a message to all registered clients (basically broadcast, we don't need to care about 1-1 messaging)
    */
-  private void addClient(Client client) {
-  }
+  private void messageAllClients() {
 
+    logger.info("Dispatching broadcast message to all registered clients");
 
+    pushMessage myPushMessage = new pushMessage();
 
-  /**
-   * Send message to Client with matching toToken. The validity of to and sender tokens
-   * should be check before this method is called.
-   *
-   * @param toToken Token of recipient of ping.
-   * @param senderToken Token of sender of ping.
-   */
-  private void pingClient(String toToken, String senderToken) {
-    Client senderClient;
-    // If the server is the recipient of the ping, send ping to sender, otherwise send ping to
-    // toToken.
-    if (toToken.equals(SENDER_ID + "@" + GcmServer.GCM_HOST)) {
-      senderClient = clientMap.get(toToken);
-      toToken = senderToken;
-    } else {
-      senderClient = clientMap.get(senderToken);
+    myPushMessage.data.put("raw", "123abc");
+    myPushMessage.data.put("message", "test message");
+    myPushMessage.data.put("type", "alarm");
+    myPushMessage.data.put("code", "123");
+    myPushMessage.data.put("timestamp", (String.valueOf((System.currentTimeMillis() / 1000L))));
+
+    myPushMessage.notification.put("badge", "0");
+    myPushMessage.notification.put("sound", "default");
+    myPushMessage.notification.put("title", "HowAlarming Event");
+    myPushMessage.notification.put("body", "Test Message");
+
+    String messageString = gson.toJson(myPushMessage);
+    JsonObject jData = new JsonParser().parse(messageString).getAsJsonObject();
+
+    for (String clientToken : registeredClients) {
+      friendlyGcmServer.send(clientToken, jData);
     }
-    JsonObject jPing = new JsonObject();
-
-    JsonObject jData = new JsonObject();
-    jData.addProperty(ACTION_KEY, PING_CLIENT);
-    jData.addProperty(SENDER_KEY, senderClient.registrationToken);
-
-    // Create notification that is handled appropriately on the receiving platform.
-    JsonObject jNotification = new JsonObject();
-    jNotification.addProperty("body", senderClient.name + " is pinging you.");
-    jNotification.addProperty("title", PING_TITLE);
-    jNotification.addProperty("icon", PING_ICON);
-    jNotification.addProperty("sound", "default");
-    jNotification.addProperty("click_action", CLICK_ACTION);
-
-    jPing.add(DATA_KEY, jData);
-    jPing.add("notification", jNotification);
-
-    friendlyGcmServer.send(toToken, jPing);
   }
 
   public static void main(String[] args) {
