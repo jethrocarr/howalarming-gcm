@@ -18,6 +18,7 @@ dependencies {
     compile 'com.google.code.gson:gson:2.3.1'
     compile 'com.google.protobuf:protobuf-java:3.0.0-alpha-2'
     compile 'com.googlecode.protobuf-java-format:protobuf-java-format:1.2'
+    compile 'com.dinstone:beanstalkc:2.2.0'
 }
 
 jar {
