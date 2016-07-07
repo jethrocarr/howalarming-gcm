@@ -18,22 +18,16 @@
 package com.jethrocarr.howalarming.gcmserver;
 
 import com.google.gson.*;
-import com.google.gson.annotations.SerializedName;
-import com.google.gson.reflect.TypeToken;
-
-import org.jivesoftware.smack.util.StringUtils;
-
 import com.dinstone.beanstalkc.*;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Map;
 import java.util.List;
-import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
 
 /**
  * HowAlarmingServer provides the logic for registering devices and providing communication between the server
@@ -128,10 +122,32 @@ public class HowAlarmingServer {
     public void beanstalkPost(String message) {
       logger.info("Posting message to beanstalk:" + message);
 
-      JobProducer producer = beanstalkFactory.createJobProducer("cli");
-      producer.putJob(0, 0, 300, message.getBytes());
+      boolean success = false;
+      while (!success) {
+
+        try {
+          // TODO: hard coded for testing, agwghgi
+          JobProducer producer = beanstalkFactory.createJobProducer("cli");
+          producer.putJob(0, 0, 300, message.getBytes());
+
+          // Sad that Java doesn't have a proper re-try catch and that we have to resort to this :-(
+          success = true;
+        } catch (ConnectionException e) {
+          logger.log(Level.SEVERE, "Unable to establish a connection to Beanstalk, retrying in 30 seconds", e);
+
+          // 30 second sleep between retries to avoid cpu going crazy ;-)
+          try {
+            Thread.sleep(30000);
+          } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+          }
+        }
+      }
 
     }
+
+
+
 
 
     /**
@@ -142,26 +158,45 @@ public class HowAlarmingServer {
 
       public void run() {
 
+        // TODO: hardcoded
         JobConsumer consumer = beanstalkFactory.createJobConsumer("alert_gcm");
 
         while (true) {
+
           // Poll for new messages to process
-          Job job = consumer.reserveJob(60);
+          try {
+            Job job = consumer.reserveJob(60);
 
-          if (job != null) {
-            // Obtain the message and push to all clients
-            // TODO: I think we need to filter accepted messages here?
-            String message = new String(job.getData());
-            messageAllClients(message);
+            if (job != null) {
+              // Obtain the message and push to all clients
+              // TODO: I think we need to filter accepted messages here?
 
-            // Delete old message
-            consumer.deleteJob(job.getId());
+              // TODO: This could almost certainly be re-worked into less mess
+              String message = new String(job.getData());
+              JsonObject messageJson = new JsonParser().parse(message).getAsJsonObject();
+
+              PushMessage myPushMessage = new PushMessage();
+              myPushMessage.fromBeanstalk(messageJson);
+
+              messageAllClients(myPushMessage);
+
+              // Delete old message
+              consumer.deleteJob(job.getId());
+            }
+          } catch (ConnectionException e) {
+            logger.log(Level.SEVERE, "Unable to establish a connection to Beanstalk, retrying in 30 seconds", e);
+
+            // 30 second sleep between retries to avoid cpu going crazy ;-)
+            try {
+              Thread.sleep(30000);
+            } catch (InterruptedException ex) {
+              Thread.currentThread().interrupt();
+            }
           }
 
-          logger.info("loop");
         }
 
-        //consumer.close();
+        // No need to close consumer, we listen until the app is terminated.
       }
     }
   }
@@ -172,6 +207,7 @@ public class HowAlarmingServer {
 
 
   private static final Logger logger = Logger.getLogger("HowAlarmingServer");
+  public static final String SERVICE_NAME = "HowAlarming GCM Server";
 
   // Creds
   private static final String SERVER_API_KEY = System.getenv("GCM_API_KEY");
@@ -182,10 +218,6 @@ public class HowAlarmingServer {
   private static final String BEANSTALK_PORT            = System.getenv("BEANSTALK_PORT");
   private static final String BEANSTALK_TUBES_EVENTS    = System.getenv("BEANSTALK_TUBES_EVENTS");
   private static final String BEANSTALK_TUBES_COMMANDS  = System.getenv("BEANSTALK_TUBES_COMMANDS");
-
-
-  // Other
-  public static final String SERVICE_NAME = "HowAlarming GCM Server";
 
   // Store registered clients for life of the application. This is populated fresh after the server
   // and clients are launched consecutively.
@@ -199,9 +231,6 @@ public class HowAlarmingServer {
 
   // Gson helper to assist with going to and from JSON and Client.
   private Gson gson;
-
-
-
 
 
   // MARK: HowAlarming Server
@@ -234,12 +263,12 @@ public class HowAlarmingServer {
    * Data model for push messages to mobile devices via GCM
    */
 
-  public class pushMessage {
+  public class PushMessage {
     public String priority;
     public Map<String,String> data;
     public Map<String,String> notification;
 
-    public pushMessage() {
+    public PushMessage() {
       // Data for the actual apps (iOS + Android), same format as the documented HowAlarming beanstalk queue.
       data = new ConcurrentHashMap<String, String>();
 
@@ -250,29 +279,34 @@ public class HowAlarmingServer {
       // alarm events can be delayed.
       priority = "high";
     }
+/*
+    public isValid() {
+      // TODO: Need to write a validator for all the fields that are required.
+    }
+  */
+
+    public void fromBeanstalk(JsonObject jData) {
+      // Take a JSON message from beantalk and package it into a PushMessage.
+
+      data.put("raw", jData.get("raw").getAsString());
+      data.put("code", jData.get("code").getAsString());
+      data.put("type", jData.get("type").getAsString());
+      data.put("message", jData.get("message").getAsString());
+      data.put("timestamp", jData.get("timestamp").getAsString());
+
+      notification.put("badge", "0");
+      notification.put("sound", "default");
+      notification.put("title", "HowAlarming Event " + data.get("type"));
+      notification.put("body", data.get("message"));
+
+    }
   }
 
   /**
    * Deliver a message to all registered clients (basically broadcast, we don't need to care about 1-1 messaging)
    */
-  public void messageAllClients(String message) {
-
-    // TODO we should use pushMessage class for this data?
-
+  public void messageAllClients(PushMessage myPushMessage) {
     logger.info("Dispatching broadcast message to all registered clients");
-
-    pushMessage myPushMessage = new pushMessage();
-
-    myPushMessage.data.put("raw", "123abc");
-    myPushMessage.data.put("message", message);
-    myPushMessage.data.put("type", "alarm");
-    myPushMessage.data.put("code", "123");
-    myPushMessage.data.put("timestamp", (String.valueOf((System.currentTimeMillis() / 1000L))));
-
-    myPushMessage.notification.put("badge", "0");
-    myPushMessage.notification.put("sound", "default");
-    myPushMessage.notification.put("title", "HowAlarming Event");
-    myPushMessage.notification.put("body", "Test Message");
 
     String messageString = gson.toJson(myPushMessage);
     JsonObject jData = new JsonParser().parse(messageString).getAsJsonObject();
