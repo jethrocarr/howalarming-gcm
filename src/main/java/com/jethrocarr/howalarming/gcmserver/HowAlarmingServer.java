@@ -79,6 +79,10 @@ public class HowAlarmingServer {
             beanstalkClient.beanstalkPost(command);
           break;
 
+          case "ping":
+            logger.info("Received ping from device to self-register.");
+          break;
+
           default:
             logger.warning("Command "+ command +" is not a support simple command type, unable to action message");
         }
@@ -173,12 +177,35 @@ public class HowAlarmingServer {
 
               // TODO: This could almost certainly be re-worked into less mess
               String message = new String(job.getData());
-              JsonObject messageJson = new JsonParser().parse(message).getAsJsonObject();
+              JsonObject messageJson;
 
-              PushMessage myPushMessage = new PushMessage();
-              myPushMessage.fromBeanstalk(messageJson);
+              try {
+                messageJson = new JsonParser().parse(message).getAsJsonObject();
+                
+                // Is this a message type we actually want to send?
+                // TODO: This should be loaded from config.
+                switch (messageJson.get("type").getAsString()) {
+                  case "alarm":
+                  case "recovery":
+                  case "fault":
+                  case "armed":
+                  case "disarmed":
+                    // Valid message type for alerting, send.
+                    PushMessage myPushMessage = new PushMessage();
+                    myPushMessage.fromBeanstalk(messageJson);
 
-              messageAllClients(myPushMessage);
+                    messageAllClients(myPushMessage);
+                  break;
+
+                  default:
+                    logger.log(Level.INFO, "Not transmitting event of type: " + messageJson.get("type"));
+                  break;
+
+                }
+
+              } catch (java.lang.IllegalStateException e) {
+                logger.log(Level.WARNING, "Received invalid JSON message, deleting and skipping " + message, e);
+              }
 
               // Delete old message
               consumer.deleteJob(job.getId());
@@ -193,7 +220,6 @@ public class HowAlarmingServer {
               Thread.currentThread().interrupt();
             }
           }
-
         }
 
         // No need to close consumer, we listen until the app is terminated.
