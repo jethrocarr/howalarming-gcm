@@ -39,9 +39,19 @@ with:
 
     export GCM_SERVER_ID=123
     export GCM_API_KEY=abc
+    export BEANSTALK_HOST=127.0.0.1
+    export BEANSTALK_PORT=11300
+    export BEANSTALK_TUBES_EVENTS=alert_gcm
+    export BEANSTALK_TUBES_COMMANDS=commands
     java -jar ./build/libs/HowAlarmingServer-all-VERSON.jar
 
 All configuration is specified via environmentals, as per the above example.
+
+
+# Easy operation
+
+A wrapper launcher ships as part of the [HowAlarming](https://github.com/jethrocarr/howalarming)
+project, which allows the Java daemon to be run easily via the [Puppet module provided](https://github.com/jethrocarr/puppet-howalarming).
 
 
 # License

@@ -104,8 +104,8 @@ public class HowAlarmingServer {
     public BeanstalkClient() {
       // Connect to beanstalk queue
       beanstalkConfig = new Configuration();
-      beanstalkConfig.setServiceHost("127.0.0.1");
-      beanstalkConfig.setServicePort(11300);
+      beanstalkConfig.setServiceHost(BEANSTALK_HOST);
+      beanstalkConfig.setServicePort(Integer.parseInt(BEANSTALK_PORT));
 
       beanstalkFactory = new BeanstalkClientFactory(beanstalkConfig);
 
@@ -127,7 +127,7 @@ public class HowAlarmingServer {
 
         try {
           // TODO: hard coded for testing, agwghgi
-          JobProducer producer = beanstalkFactory.createJobProducer("cli");
+          JobProducer producer = beanstalkFactory.createJobProducer(BEANSTALK_TUBES_COMMANDS);
           producer.putJob(0, 0, 300, message.getBytes());
 
           // Sad that Java doesn't have a proper re-try catch and that we have to resort to this :-(
@@ -214,10 +214,10 @@ public class HowAlarmingServer {
   private static final String SENDER_ID = System.getenv("GCM_SENDER_ID");
 
   // Beanstalk Queue
-  private static final String BEANSTALK_HOST            = System.getenv("BEANSTALK_HOST");
-  private static final String BEANSTALK_PORT            = System.getenv("BEANSTALK_PORT");
-  private static final String BEANSTALK_TUBES_EVENTS    = System.getenv("BEANSTALK_TUBES_EVENTS");
-  private static final String BEANSTALK_TUBES_COMMANDS  = System.getenv("BEANSTALK_TUBES_COMMANDS");
+  private static String BEANSTALK_HOST            = System.getenv("BEANSTALK_HOST");
+  private static String BEANSTALK_PORT            = System.getenv("BEANSTALK_PORT");
+  private static String BEANSTALK_TUBES_EVENTS    = System.getenv("BEANSTALK_TUBES_EVENTS");
+  private static String BEANSTALK_TUBES_COMMANDS  = System.getenv("BEANSTALK_TUBES_COMMANDS");
 
   // Store registered clients for life of the application. This is populated fresh after the server
   // and clients are launched consecutively.
@@ -237,6 +237,23 @@ public class HowAlarmingServer {
 
 
   public HowAlarmingServer(String apiKey, String senderId) {
+
+    // Validate configuration
+    if (BEANSTALK_HOST == null) {
+      BEANSTALK_HOST="127.0.0.1";
+    }
+
+    if (BEANSTALK_PORT == null) {
+      BEANSTALK_PORT="11300";
+    }
+
+    if (BEANSTALK_TUBES_EVENTS == null) {
+      BEANSTALK_TUBES_EVENTS="alert_gcm";
+    }
+
+    if (BEANSTALK_TUBES_COMMANDS == null) {
+      BEANSTALK_TUBES_COMMANDS="commands";
+    }
 
     registeredClients = new ArrayList<String>();
     gson = new GsonBuilder().create();
