@@ -33,155 +33,157 @@ import java.util.logging.Logger;
 public class HowAlarmingServer extends HowAlarmingConfig {
 
 
-  // MARK: GcmServer
+    // MARK: GcmServer
 
-  /**
-   * We define our own specific GcmServer in order to override onMessage with specific logic for handling the messages
-   * we receive from the mobile apps via the GCM network.
-   */
-  private class HowAlarmingGcmServer extends GcmServer {
+    /**
+     * We define our own specific GcmServer in order to override onMessage with specific logic for handling the messages
+     * we receive from the mobile apps via the GCM network.
+     */
+    private class HowAlarmingGcmServer extends GcmServer {
 
-    public HowAlarmingGcmServer (String apiKey, String senderId, String serviceName) {
-      super(apiKey, senderId, serviceName);
-    }
-
-    @Override
-    public void onMessage(String from, JsonObject jData) {
-      /**
-       * We only support a few of the common commands to all alarm models here.
-       */
-
-      if (jData.has("registration_token")) {
-        String registration_token = jData.get("registration_token").getAsString();
-        logger.info("Message sender: "+ registration_token);
-
-        if (!registeredClients.contains(registration_token)) {
-          registerNewClient(registration_token);
-        }
-      }
-
-      if (jData.has("command")) {
-        String command = jData.get("command").getAsString();
-
-        logger.info("Command \""+ command +"\" received from device.");
-
-        switch (command) {
-          case "status":
-          case "arm":
-          case "disarm":
-          case "fire":
-          case "medical":
-          case "police":
-            // Supported simple commands in HowAlarming. We feed these into the beanstalk queue(s)
-            beanstalkClient.beanstalkPost(command);
-          break;
-
-          case "ping":
-            logger.info("Received ping from device to self-register.");
-          break;
-
-          default:
-            logger.warning("Command "+ command +" is not a support simple command type, unable to action message");
+        public HowAlarmingGcmServer (String apiKey, String senderId, String serviceName) {
+            super(apiKey, senderId, serviceName);
         }
 
+        @Override
+        public void onMessage(String from, JsonObject jData) {
+            /**
+             * We only support a few of the common commands to all alarm models here.
+             */
 
-      } else {
-        logger.info("Unexpected message received from GCM, ignoring.");
-      }
+            String registration_token;
+
+            if (jData.has("registration_token")) {
+                registration_token = jData.get("registration_token").getAsString();
+                logger.info("Message sender: "+ registration_token);
+
+                if (!registeredClients.contains(registration_token)) {
+                    registerNewClient(registration_token);
+                }
+            }
+
+            if (jData.has("command")) {
+                String command = jData.get("command").getAsString();
+
+                logger.info("Command \""+ command +"\" received from device.");
+
+                switch (command) {
+                    case "status":
+                    case "arm":
+                    case "disarm":
+                    case "fire":
+                    case "medical":
+                    case "police":
+                        // Supported simple commands in HowAlarming. We feed these into the beanstalk queue(s)
+                        beanstalkClient.beanstalkPost(command);
+                        break;
+
+                    case "ping":
+
+                        break;
+
+                    default:
+                        logger.warning("Command "+ command +" is not a support simple command type, unable to action message");
+                }
+
+
+            } else {
+                logger.info("Unexpected message received from GCM, ignoring.");
+            }
+        }
     }
-  }
 
 
 
-  // MARK: Properties
+    // MARK: Properties
 
 
-  private static final Logger logger = Logger.getLogger("HowAlarmingServer");
-  public static final String SERVICE_NAME = "HowAlarming GCM Server";
+    private static final Logger logger = Logger.getLogger("HowAlarmingServer");
+    public static final String SERVICE_NAME = "HowAlarming GCM Server";
 
 
 
-  // Store registered clients for life of the application. This is populated fresh after the server
-  // and clients are launched consecutively.
-  private List<String> registeredClients;
+    // Store registered clients for life of the application. This is populated fresh after the server
+    // and clients are launched consecutively.
+    private List<String> registeredClients;
 
-  // Listener responsible for handling incoming registrations and pings.
-  private HowAlarmingGcmServer HowAlarmingGcmServer;
+    // Listener responsible for handling incoming registrations and pings.
+    private HowAlarmingGcmServer HowAlarmingGcmServer;
 
-  // Beanstalk Client
-  private BeanstalkClient beanstalkClient;
+    // Beanstalk Client
+    private BeanstalkClient beanstalkClient;
 
-  // Gson helper to assist with going to and from JSON and Client.
-  private Gson gson;
-
-
-  // MARK: HowAlarming Server
+    // Gson helper to assist with going to and from JSON and Client.
+    private Gson gson;
 
 
-  public HowAlarmingServer(String apiKey, String senderId) {
-
-    registeredClients = new ArrayList<String>();
-    gson = new GsonBuilder().create();
-
-    beanstalkClient = new BeanstalkClient();
-    HowAlarmingGcmServer = new HowAlarmingGcmServer(apiKey, senderId, SERVICE_NAME);
-
-    messageAllClients.addObserver(new messageAllClients());
-
-  }
+    // MARK: HowAlarming Server
 
 
-  /**
-   * Add a new client to the client list.
-   *
-   * @param registrationToken String with GCM token ID of client.
-   */
-  private void registerNewClient(String registrationToken) {
-    if (!registeredClients.contains(registrationToken)) {
-      logger.info("Registered new client "+ registrationToken);
-      registeredClients.add(registrationToken);
+    public HowAlarmingServer(String apiKey, String senderId) {
+
+        registeredClients = new ArrayList<String>();
+        gson = new GsonBuilder().create();
+
+        beanstalkClient = new BeanstalkClient();
+        HowAlarmingGcmServer = new HowAlarmingGcmServer(apiKey, senderId, SERVICE_NAME);
+
+        messageAllClients.addObserver(new messageAllClients());
+
     }
-  }
 
 
-  /**
-   * Deliver a message to all registered clients (basically broadcast, we don't need to care about 1-1 messaging)
-   */
-  private class messageAllClients implements Observer {
-    public void update(Observable obj, Object arg) {
+    /**
+     * Add a new client to the client list.
+     *
+     * @param registrationToken String with GCM token ID of client.
+     */
+    private void registerNewClient(String registrationToken) {
+        if (!registeredClients.contains(registrationToken)) {
+            logger.info("Registered new client "+ registrationToken);
+            registeredClients.add(registrationToken);
+        }
+    }
 
-      PushMessage myPushMessage = (PushMessage) arg;
 
-      logger.info("Dispatching broadcast message to all registered clients");
+    /**
+     * Deliver a message to all registered clients (basically broadcast, we don't need to care about 1-1 messaging)
+     */
+    private class messageAllClients implements Observer {
+        public void update(Observable obj, Object arg) {
 
-      String messageString = gson.toJson(myPushMessage);
-      JsonObject jData = new JsonParser().parse(messageString).getAsJsonObject();
+            PushMessage myPushMessage = (PushMessage) arg;
 
-      for (String clientToken : registeredClients) {
+            logger.info("Dispatching broadcast message to all registered clients");
+
+            String messageString = gson.toJson(myPushMessage);
+            JsonObject jData = new JsonParser().parse(messageString).getAsJsonObject();
+
+            for (String clientToken : registeredClients) {
+                try {
+                    HowAlarmingGcmServer.send(clientToken, jData);
+                } catch (Exception e) {
+                    logger.log(Level.SEVERE, "An unexpected error occurred attempting to message device: " + clientToken, e);
+                }
+            }
+        }
+    }
+
+
+
+    // MARK: main()
+
+    public static void main(String[] args) {
+
+        // Initialize HowAlarmingServer with appropriate API Key and SenderID.
+        new HowAlarmingServer(SERVER_API_KEY, SENDER_ID);
+
+        // Keep main thread alive.
         try {
-          HowAlarmingGcmServer.send(clientToken, jData);
-        } catch (Exception e) {
-          logger.log(Level.SEVERE, "An unexpected error occurred attempting to message device: " + clientToken, e);
+            CountDownLatch latch = new CountDownLatch(1);
+            latch.await();
+        } catch (InterruptedException e) {
+            logger.log(Level.SEVERE, "An error occurred while latch was waiting.", e);
         }
-      }
     }
-  }
-
-
-
-  // MARK: main()
-
-  public static void main(String[] args) {
-
-    // Initialize HowAlarmingServer with appropriate API Key and SenderID.
-    new HowAlarmingServer(SERVER_API_KEY, SENDER_ID);
-
-    // Keep main thread alive.
-    try {
-      CountDownLatch latch = new CountDownLatch(1);
-      latch.await();
-    } catch (InterruptedException e) {
-      logger.log(Level.SEVERE, "An error occurred while latch was waiting.", e);
-    }
-  }
 }
