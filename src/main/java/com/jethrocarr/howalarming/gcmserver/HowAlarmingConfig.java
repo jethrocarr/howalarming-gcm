@@ -1,8 +1,5 @@
 package com.jethrocarr.howalarming.gcmserver;
 
-import java.util.List;
-import java.util.Observable;
-import java.util.Observer;
 
 /**
  * Global configuration parameters used throughout the application

@@ -17,13 +17,9 @@
 
 package com.jethrocarr.howalarming.gcmserver;
 
-import com.dinstone.beanstalkc.ConnectionException;
 import com.google.gson.*;
-import com.dinstone.beanstalkc.*;
-import com.sun.org.apache.bcel.internal.generic.PUSH;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.logging.Level;
 import java.util.logging.Logger;

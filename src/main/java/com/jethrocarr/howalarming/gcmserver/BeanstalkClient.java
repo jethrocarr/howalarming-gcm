@@ -4,7 +4,6 @@ import com.dinstone.beanstalkc.*;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
-import java.util.Observable;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
