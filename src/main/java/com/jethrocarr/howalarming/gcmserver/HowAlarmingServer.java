@@ -161,7 +161,7 @@ public class HowAlarmingServer extends HowAlarmingConfig {
         try {
           HowAlarmingGcmServer.send(clientToken, jData);
         } catch (Exception e) {
-          logger.log(Level.SEVERE, "An unexpected error occured attempting to message device: " + clientToken, e);
+          logger.log(Level.SEVERE, "An unexpected error occurred attempting to message device: " + clientToken, e);
         }
       }
     }
