@@ -20,10 +20,9 @@ package com.jethrocarr.howalarming.gcmserver;
 import com.dinstone.beanstalkc.ConnectionException;
 import com.google.gson.*;
 import com.dinstone.beanstalkc.*;
+import com.sun.org.apache.bcel.internal.generic.PUSH;
 
-import java.util.ArrayList;
-import java.util.Map;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.logging.Level;
@@ -35,7 +34,7 @@ import java.util.logging.Logger;
  * HowAlarmingServer provides the logic for registering devices and providing communication between the server
  * and the client devices/apps.
  */
-public class HowAlarmingServer {
+public class HowAlarmingServer extends HowAlarmingConfig {
 
 
   // MARK: GcmServer
@@ -97,139 +96,6 @@ public class HowAlarmingServer {
   }
 
 
-  // MARK: BeanstalkClient
-
-  /*
-    BeanstalkClient defines a class for exchanging messages to/from Beanstalk
-   */
-  public class BeanstalkClient {
-
-    private Configuration beanstalkConfig;
-    private BeanstalkClientFactory beanstalkFactory;
-
-    public BeanstalkClient() {
-      // Connect to beanstalk queue
-      beanstalkConfig = new Configuration();
-      beanstalkConfig.setServiceHost(BEANSTALK_HOST);
-      beanstalkConfig.setServicePort(Integer.parseInt(BEANSTALK_PORT));
-
-      beanstalkFactory = new BeanstalkClientFactory(beanstalkConfig);
-
-      // Launch the tube listener in a dedicated thread.
-      Thread beanstalkClientThread = new Thread(new BeanstalkListener());
-      beanstalkClientThread.setName("Beanstalk Queue Reader");
-      beanstalkClientThread.start();
-    }
-
-    /**
-     * The beanstalkPost method is called via the GCM server when a new (valid) command is received from a mobile
-     * device via GCM. It takes the message and pops it onto the queue(s) for the alarm to action.
-     */
-    public void beanstalkPost(String message) {
-      logger.info("Posting message to beanstalk:" + message);
-
-      boolean success = false;
-      while (!success) {
-
-        try {
-          // TODO: hard coded for testing, agwghgi
-          JobProducer producer = beanstalkFactory.createJobProducer(BEANSTALK_TUBES_COMMANDS);
-          producer.putJob(0, 0, 300, message.getBytes());
-
-          // Sad that Java doesn't have a proper re-try catch and that we have to resort to this :-(
-          success = true;
-        } catch (ConnectionException e) {
-          logger.log(Level.SEVERE, "Unable to establish a connection to Beanstalk, retrying in 30 seconds", e);
-
-          // 30 second sleep between retries to avoid cpu going crazy ;-)
-          try {
-            Thread.sleep(30000);
-          } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
-          }
-        }
-      }
-
-    }
-
-
-
-
-
-    /**
-     * The listener runs long polls (60 seconds) in a loop waiting for any messages from the queue. Upon receiving a
-     * message, it broadcasts it to all registered clients via the GCM network.
-     */
-    public class BeanstalkListener implements Runnable {
-
-      public void run() {
-
-        // TODO: hardcoded
-        JobConsumer consumer = beanstalkFactory.createJobConsumer("alert_gcm");
-
-        while (true) {
-
-          // Poll for new messages to process
-          try {
-            Job job = consumer.reserveJob(60);
-
-            if (job != null) {
-              // Obtain the message and push to all clients
-              // TODO: I think we need to filter accepted messages here?
-
-              // TODO: This could almost certainly be re-worked into less mess
-              String message = new String(job.getData());
-              JsonObject messageJson;
-
-              try {
-                messageJson = new JsonParser().parse(message).getAsJsonObject();
-
-                // Is this a message type we actually want to send?
-                // TODO: This should be loaded from config.
-                switch (messageJson.get("type").getAsString()) {
-                  case "alarm":
-                  case "recovery":
-                  case "fault":
-                  case "armed":
-                  case "disarmed":
-                    // Valid message type for alerting, send.
-                    PushMessage myPushMessage = new PushMessage();
-                    myPushMessage.fromBeanstalk(messageJson);
-
-                    messageAllClients(myPushMessage);
-                  break;
-
-                  default:
-                    logger.log(Level.INFO, "Not transmitting event of type: " + messageJson.get("type"));
-                  break;
-
-                }
-
-              } catch (java.lang.IllegalStateException e) {
-                logger.log(Level.WARNING, "Received invalid JSON message, deleting and skipping " + message, e);
-              }
-
-              // Delete old message
-              consumer.deleteJob(job.getId());
-            }
-          } catch (ConnectionException e) {
-            logger.log(Level.SEVERE, "Unable to establish a connection to Beanstalk, retrying in 30 seconds", e);
-
-            // 30 second sleep between retries to avoid cpu going crazy ;-)
-            try {
-              Thread.sleep(30000);
-            } catch (InterruptedException ex) {
-              Thread.currentThread().interrupt();
-            }
-          }
-        }
-
-        // No need to close consumer, we listen until the app is terminated.
-      }
-    }
-  }
-
-
 
   // MARK: Properties
 
@@ -237,15 +103,7 @@ public class HowAlarmingServer {
   private static final Logger logger = Logger.getLogger("HowAlarmingServer");
   public static final String SERVICE_NAME = "HowAlarming GCM Server";
 
-  // Creds
-  private static final String SERVER_API_KEY = System.getenv("GCM_API_KEY");
-  private static final String SENDER_ID = System.getenv("GCM_SENDER_ID");
 
-  // Beanstalk Queue
-  private static String BEANSTALK_HOST            = System.getenv("BEANSTALK_HOST");
-  private static String BEANSTALK_PORT            = System.getenv("BEANSTALK_PORT");
-  private static String BEANSTALK_TUBES_EVENTS    = System.getenv("BEANSTALK_TUBES_EVENTS");
-  private static String BEANSTALK_TUBES_COMMANDS  = System.getenv("BEANSTALK_TUBES_COMMANDS");
 
   // Store registered clients for life of the application. This is populated fresh after the server
   // and clients are launched consecutively.
@@ -266,28 +124,14 @@ public class HowAlarmingServer {
 
   public HowAlarmingServer(String apiKey, String senderId) {
 
-    // Validate configuration
-    if (BEANSTALK_HOST == null) {
-      BEANSTALK_HOST="127.0.0.1";
-    }
-
-    if (BEANSTALK_PORT == null) {
-      BEANSTALK_PORT="11300";
-    }
-
-    if (BEANSTALK_TUBES_EVENTS == null) {
-      BEANSTALK_TUBES_EVENTS="alert_gcm";
-    }
-
-    if (BEANSTALK_TUBES_COMMANDS == null) {
-      BEANSTALK_TUBES_COMMANDS="commands";
-    }
-
     registeredClients = new ArrayList<String>();
     gson = new GsonBuilder().create();
 
     beanstalkClient = new BeanstalkClient();
     HowAlarmingGcmServer = new HowAlarmingGcmServer(apiKey, senderId, SERVICE_NAME);
+
+    messageAllClients.addObserver(new messageAllClients());
+
   }
 
 
@@ -307,17 +151,22 @@ public class HowAlarmingServer {
   /**
    * Deliver a message to all registered clients (basically broadcast, we don't need to care about 1-1 messaging)
    */
-  public void messageAllClients(PushMessage myPushMessage) {
-    logger.info("Dispatching broadcast message to all registered clients");
+  private class messageAllClients implements Observer {
+    public void update(Observable obj, Object arg) {
 
-    String messageString = gson.toJson(myPushMessage);
-    JsonObject jData = new JsonParser().parse(messageString).getAsJsonObject();
+      PushMessage myPushMessage = (PushMessage) arg;
 
-    for (String clientToken : registeredClients) {
-      try {
-        HowAlarmingGcmServer.send(clientToken, jData);
-      } catch (Exception e) {
-        logger.log(Level.SEVERE, "An unexpected error occured attempting to message device: " + clientToken, e);
+      logger.info("Dispatching broadcast message to all registered clients");
+
+      String messageString = gson.toJson(myPushMessage);
+      JsonObject jData = new JsonParser().parse(messageString).getAsJsonObject();
+
+      for (String clientToken : registeredClients) {
+        try {
+          HowAlarmingGcmServer.send(clientToken, jData);
+        } catch (Exception e) {
+          logger.log(Level.SEVERE, "An unexpected error occured attempting to message device: " + clientToken, e);
+        }
       }
     }
   }
