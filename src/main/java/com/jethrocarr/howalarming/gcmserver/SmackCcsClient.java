@@ -74,6 +74,20 @@ public class SmackCcsClient {
       @Override
       public void connectionClosedOnError(Exception e) {
         logger.log(Level.WARNING, "Connection closed because of an error.", e);
+
+        /*
+         * Not sure why this doesn't automatically reconnect, but it seems to be a real issue
+         * on occasions. This should do the trick to force a reconnection.
+         */
+        try {
+          logger.log(Level.WARNING, "Reconnecting to GCM...");
+
+          connection.disconnect();
+          connection.connect();
+
+        } catch (SmackException | IOException | XMPPException e2) {
+          logger.log(Level.SEVERE, "Error occurred whilst attempting to reconnect to GCM");
+        }
       }
 
       @Override
@@ -113,11 +127,53 @@ public class SmackCcsClient {
     logger.info("Listening for incoming XMPP Stanzas...");
   }
 
+  /**
+   * Send an XMPP message. If the connection fails, attempt to reconnect and resend up to 5 times.
+   *
+   * @param stanza
+   */
   public void sendStanza(Stanza stanza) {
-    try {
-      connection.sendStanza(stanza);
-    } catch (SmackException.NotConnectedException e) {
-      logger.log(Level.SEVERE, "Error occurred while sending stanza.", e);
+
+    Integer retries = 0;
+
+    while (retries < 5) {
+      try {
+        connection.sendStanza(stanza);
+      } catch (SmackException.NotConnectedException e) {
+        logger.log(Level.SEVERE, "Error occurred while sending stanza.", e);
+
+        /* This bit is a bit weird. In theory, ConnectionListener should have a handler for catching send failures,
+         * but this doesn't appear to be the case. In theory, the ConnectionListener *should* already have recreated
+         * a dropped connection, but if it hasn't/couldn't (eg GCM down for a prolonged period) we should force a retry
+         * when we come to send messages - it's important that we do everything we can do get the alert messages to the
+         * devices.
+         */
+        try {
+          logger.log(Level.WARNING, "Reconnecting to GCM...");
+
+          // There does not appear to be an intelligent reconnect routine, so we just disconnect
+          // and reconnect.
+          connection.disconnect();
+          connection.connect();
+
+        } catch (SmackException | IOException | XMPPException e2) {
+          logger.log(Level.SEVERE, "Error occurred whilst attempting to reconnect to GCM");
+        }
+
+        // Increment retries attempt
+        retries++;
+
+        // 30 second sleep between retries
+        try {
+          Thread.sleep(30000);
+        } catch (InterruptedException ex) {
+          Thread.currentThread().interrupt();
+        }
+
+      } finally {
+        // Our work here is done
+        return;
+      }
     }
   }
 }

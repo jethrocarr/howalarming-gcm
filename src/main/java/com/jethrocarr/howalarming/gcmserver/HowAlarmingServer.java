@@ -17,6 +17,7 @@
 
 package com.jethrocarr.howalarming.gcmserver;
 
+import com.dinstone.beanstalkc.ConnectionException;
 import com.google.gson.*;
 import com.dinstone.beanstalkc.*;
 
@@ -27,6 +28,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
 
 
 /**
@@ -181,7 +183,7 @@ public class HowAlarmingServer {
 
               try {
                 messageJson = new JsonParser().parse(message).getAsJsonObject();
-                
+
                 // Is this a message type we actually want to send?
                 // TODO: This should be loaded from config.
                 switch (messageJson.get("type").getAsString()) {
@@ -355,7 +357,11 @@ public class HowAlarmingServer {
     JsonObject jData = new JsonParser().parse(messageString).getAsJsonObject();
 
     for (String clientToken : registeredClients) {
-      HowAlarmingGcmServer.send(clientToken, jData);
+      try {
+        HowAlarmingGcmServer.send(clientToken, jData);
+      } catch (Exception e) {
+        logger.log(Level.SEVERE, "An unexpected error occured attempting to message device: " + clientToken, e);
+      }
     }
   }
 
