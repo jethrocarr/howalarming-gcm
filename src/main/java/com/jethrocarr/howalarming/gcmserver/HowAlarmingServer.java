@@ -51,7 +51,7 @@ public class HowAlarmingServer extends HowAlarmingConfig {
              * We only support a few of the common commands to all alarm models here.
              */
 
-            String registration_token;
+            String registration_token = new String();
 
             if (jData.has("registration_token")) {
                 registration_token = jData.get("registration_token").getAsString();
@@ -79,6 +79,25 @@ public class HowAlarmingServer extends HowAlarmingConfig {
                         break;
 
                     case "ping":
+                        /**
+                         * A ping is sent by the mobile app every time it starts. This ensures that the app gets registered if the
+                         * GCM server has been reset, but also allows us to send back the current alarm status for the UI to know
+                         * whether it is armed/disarmed.
+                         */
+                        logger.info("Received ping from device, sending back status.");
+
+                        if (registration_token != null) {
+                            PushMessage myPushMessage = new PushMessage();
+                            myPushMessage.alarmStatus();
+
+                            JsonObject myPushJMessageJson = new JsonParser().parse(gson.toJson(myPushMessage)).getAsJsonObject();
+
+                            try {
+                                HowAlarmingGcmServer.send(registration_token, myPushJMessageJson);
+                            } catch (Exception e) {
+                                logger.log(Level.SEVERE, "An unexpected error occurred attempting to message device: " + registration_token, e);
+                            }
+                        }
 
                         break;
 

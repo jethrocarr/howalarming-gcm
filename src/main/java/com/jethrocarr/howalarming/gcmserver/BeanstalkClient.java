@@ -60,13 +60,14 @@ public class BeanstalkClient extends HowAlarmingConfig {
      * device via GCM. It takes the message and pops it onto the queue(s) for the alarm to action.
      */
     public void beanstalkPost(String message) {
-        logger.info("Posting message to beanstalk:" + message);
+        logger.info("Posting message to beanstalk: " + message);
 
         boolean success = false;
         while (!success) {
 
             try {
                 // TODO: hard coded for testing, agwghgi
+                logger.info("Pushing message to tube: "+ BEANSTALK_TUBES_COMMANDS);
                 JobProducer producer = beanstalkFactory.createJobProducer(BEANSTALK_TUBES_COMMANDS);
                 producer.putJob(0, 0, 300, message.getBytes());
 
@@ -114,10 +115,11 @@ public class BeanstalkClient extends HowAlarmingConfig {
 
                         try {
                             messageJson = new JsonParser().parse(message).getAsJsonObject();
+                            String messageType = messageJson.get("type").getAsString();
 
                             // Is this a message type we actually want to send?
                             // TODO: This should be loaded from config.
-                            switch (messageJson.get("type").getAsString()) {
+                            switch (messageType) {
                                 case "alarm":
                                 case "recovery":
                                 case "fault":
@@ -130,6 +132,14 @@ public class BeanstalkClient extends HowAlarmingConfig {
                                     // We need to get our PushMesaage through to the GCM server in another
                                     // thread, so we use an observer to trigger an update on an event.
                                     messageAllClients.send(myPushMessage);
+
+                                    // Update the in-memory state
+                                    if (messageType == "armed") {
+                                        stateArmed = ALARM_STATE_ARMED;
+                                    }
+                                    if (messageType == "disarmed") {
+                                        stateArmed = ALARM_STATE_DISARMED;
+                                    }
 
                                     break;
 

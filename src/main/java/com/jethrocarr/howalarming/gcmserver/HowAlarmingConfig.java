@@ -35,6 +35,12 @@ public class HowAlarmingConfig {
     // Observer used to send messages from Beanstalk reads through to GCM pushes
     public static PushMessageDispatch messageAllClients = new PushMessageDispatch();
 
+    // Alarm system status
+    public static final String ALARM_STATE_UNKNOWN  = "unknown";
+    public static final String ALARM_STATE_ARMED    = "armed";
+    public static final String ALARM_STATE_DISARMED = "disarmed";
+    public static String stateArmed = ALARM_STATE_UNKNOWN;
+
     /**
      * Validate all the required configuration in the constructor, and set defaults as required.
      */

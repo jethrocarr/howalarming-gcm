@@ -47,6 +47,22 @@ public class PushMessage {
     }
   */
 
+
+    public void alarmStatus() {
+        // Package the current state of the alarm system into a Push Message
+
+        data.put("raw", "HOWALARMING");
+        data.put("code", "HOWALARMING");
+        data.put("type", "disarmed");
+        data.put("message", "HOWALARMING");
+
+        Long timestamp = System.currentTimeMillis() / 1000L;
+        data.put("timestamp", timestamp.toString());
+
+        // Tell APNS/GCM that this should be a silent background notification
+        //notification.put("content-available", "1");
+    }
+
     public void fromBeanstalk(JsonObject jData) {
         // Take a JSON message from beanstalk and package it into a PushMessage.
 
