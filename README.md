@@ -4,11 +4,12 @@ This small Java application provides a bridge between
 [HowAlarming](https://github.com/jethrocarr/howalarming) and Google Compute
 Messaging (GCM) used by the companion Android and iOS apps.
 
-Unlike the lightweight `alert_gcm.py`, this service offers bi-directional
-communication between applications which enables in-app actions to be relayed
-through to the alarm system.
+Unlike more lightweight implementations with the HTTP service, this service
+offers bi-directional communication between applications which enables in-app
+actions to be relayed through to the alarm system.
 
-Based heavily on the FriendlyPing example application published by Google.
+XMPP handling code based heavily on the FriendlyPing example application
+published by Google.
 
 
 # Application Registration
