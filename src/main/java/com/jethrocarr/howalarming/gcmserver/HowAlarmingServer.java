@@ -51,7 +51,7 @@ public class HowAlarmingServer extends HowAlarmingConfig {
              * We only support a few of the common commands to all alarm models here.
              */
 
-            String registration_token = new String();
+            String registration_token = null;
 
             if (jData.has("registration_token")) {
                 registration_token = jData.get("registration_token").getAsString();
