@@ -88,7 +88,7 @@ public class HowAlarmingServer extends HowAlarmingConfig {
 
                         if (registration_token != null) {
                             PushMessage myPushMessage = new PushMessage();
-                            myPushMessage.alarmStatus();
+                            myPushMessage.alarmStatus(stateArmed);
 
                             JsonObject myPushJMessageJson = new JsonParser().parse(gson.toJson(myPushMessage)).getAsJsonObject();
 

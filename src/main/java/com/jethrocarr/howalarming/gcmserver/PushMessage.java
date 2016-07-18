@@ -48,12 +48,12 @@ public class PushMessage {
   */
 
 
-    public void alarmStatus() {
+    public void alarmStatus(String alarmState) {
         // Package the current state of the alarm system into a Push Message
 
         data.put("raw", "HOWALARMING");
         data.put("code", "HOWALARMING");
-        data.put("type", "disarmed");
+        data.put("type", alarmState);
         data.put("message", "HOWALARMING");
 
         Long timestamp = System.currentTimeMillis() / 1000L;
