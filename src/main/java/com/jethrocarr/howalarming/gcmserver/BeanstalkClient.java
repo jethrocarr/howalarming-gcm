@@ -134,10 +134,10 @@ public class BeanstalkClient extends HowAlarmingConfig {
                                     messageAllClients.send(myPushMessage);
 
                                     // Update the in-memory state
-                                    if (messageType == "armed") {
+                                    if (messageType.equals("armed")) {
                                         stateArmed = ALARM_STATE_ARMED;
                                     }
-                                    if (messageType == "disarmed") {
+                                    if (messageType.equals("disarmed")) {
                                         stateArmed = ALARM_STATE_DISARMED;
                                     }
 
