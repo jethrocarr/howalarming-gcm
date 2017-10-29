@@ -27,7 +27,6 @@ import java.util.concurrent.ConcurrentHashMap;
 public class PushMessage {
 
     public String priority;
-    public Boolean content_available;
     public Map<String,String> data;
     public Map<String,String> notification;
 
@@ -41,12 +40,6 @@ public class PushMessage {
         // We want to ensure APNS always give us priority pushes for alarm events, otherwise
         // alarm events can be delayed.
         priority = "high";
-
-        // We need to set content-available in order to ensure iOS invokes didReceiveRemoteNotification
-        // for a background remote notification (thus waking up our app to process the data we just sent
-        // it). Note the underscore and use of bool rather than 1 like APNS directly, GCM uses a different
-        // style... which arguably is better for us doing Java since using dash in a variable name doesn't work...
-        content_available = true;
     }
 /*
     public isValid() {
@@ -65,6 +58,9 @@ public class PushMessage {
 
         Long timestamp = System.currentTimeMillis() / 1000L;
         data.put("timestamp", timestamp.toString());
+
+        // Tell APNS/GCM that this should be a silent background notification
+        //notification.put("content-available", "1");
     }
 
     public void fromBeanstalk(JsonObject jData) {
