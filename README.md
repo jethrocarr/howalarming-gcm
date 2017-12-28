@@ -38,7 +38,7 @@ This creates a standalone JAR file in `./build/libs/HowAlarmingServer-all-VERSON
 which includes all the dependencies and is ready-to-run as a foreground server
 with:
 
-    export GCM_SERVER_ID=123
+    export GCM_SENDER_ID=123
     export GCM_API_KEY=abc
     export BEANSTALK_HOST=127.0.0.1
     export BEANSTALK_PORT=11300
