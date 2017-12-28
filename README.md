@@ -1,8 +1,8 @@
-# HowAlarming GCM Server
+# HowAlarming FCM/GCM Server
 
 This small Java application provides a bridge between
-[HowAlarming](https://github.com/jethrocarr/howalarming) and Google Compute
-Messaging (GCM) used by the companion Android and iOS apps.
+[HowAlarming](https://github.com/jethrocarr/howalarming) and Google Firebase
+Cloud Messaging (formerly GCM) used by the companion Android and iOS apps.
 
 Unlike more lightweight implementations with the HTTP service, this service
 offers bi-directional communication between applications which enables in-app
@@ -10,6 +10,9 @@ actions to be relayed through to the alarm system.
 
 XMPP handling code based heavily on the FriendlyPing example application
 published by Google.
+
+Compatible with both GCM and FCM, configured to use the current Firebase (FCM)
+gateway address and tested with apps using both the FCM and GCM SDKs.
 
 
 # Application Registration
@@ -60,13 +63,11 @@ project, which allows the Java daemon to be run easily via the [Puppet module pr
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
     You may obtain a copy of the License at
-    
+
     http://www.apache.org/licenses/LICENSE-2.0
-    
+
     Unless required by applicable law or agreed to in writing, software
     distributed under the License is distributed on an "AS IS" BASIS,
     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
     See the License for the specific language governing permissions and
     limitations under the License.
-
-

@@ -72,7 +72,7 @@ public abstract class GcmServer {
 
   public static final String GCM_NAMESPACE = "google:mobile:data";
   public static final String GCM_ELEMENT_NAME = "gcm";
-  public static final String GCM_HOST = "gcm.googleapis.com";
+  public static final String GCM_HOST = "fcm-xmpp.googleapis.com";
   public static final int GCM_CCS_PORT = 5235;
 
   private static final Logger logger = Logger.getLogger("GcmServer");
@@ -90,7 +90,7 @@ public abstract class GcmServer {
   public GcmServer(String apiKey, String senderId, String serviceName) {
     jsonParser = new JsonParser();
     gson = new GsonBuilder().create();
-    String username = senderId + "@" + GCM_HOST;
+    String username = senderId + "@gcm.googleapis.com";
     smackCcsClient = new SmackCcsClient(apiKey, username, serviceName, GCM_HOST, GCM_CCS_PORT);
 
     // Add the GcmPacketExtension as an extension provider.
