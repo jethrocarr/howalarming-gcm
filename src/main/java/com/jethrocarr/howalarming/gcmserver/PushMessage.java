@@ -27,6 +27,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class PushMessage {
 
     public String priority;
+    public Integer time_to_live;
     public Map<String,String> data;
     public Map<String,String> notification;
 
@@ -40,6 +41,11 @@ public class PushMessage {
         // We want to ensure APNS always give us priority pushes for alarm events, otherwise
         // alarm events can be delayed.
         priority = "high";
+
+        // By default use TTL of 1 hour for message delivery. We override this for some message types, eg status
+        // messages. Full details about FCM TTLs available at:
+        // https://firebase.google.com/docs/cloud-messaging/concept-options#ttl
+        time_to_live = 3600;
     }
 /*
     public isValid() {
@@ -59,8 +65,10 @@ public class PushMessage {
         Long timestamp = System.currentTimeMillis() / 1000L;
         data.put("timestamp", timestamp.toString());
 
-        // Tell APNS/GCM that this should be a silent background notification
-        //notification.put("content-available", "1");
+        // Use 0 TTL to ensure messages are either delivered immediately, or abandoned. This also forces FCM to never
+        // throttle the delivery of a message. Out of date status messages are useless to us, so we are better to drop
+        // them if we couldn't receive one.
+        time_to_live = 0;
     }
 
     public void fromBeanstalk(JsonObject jData) {
